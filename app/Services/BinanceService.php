@@ -187,13 +187,13 @@ class BinanceService
 
                 $cryptoTrading = new CryptoTrading();
                 //Get the percentage change between now and 10 mins ago
-                var_dump('last price = ' . $lastTradeMade->price);
-                var_dump('now price = ' . $value);
+                // var_dump('last price = ' . $lastTradeMade->price);
+                // var_dump('now price = ' . $value);
 
                 $decreaseValue = $value - (float)$lastTradeMade->price;
                 $percentChange = round(($decreaseValue / $value) * 100, 2);
 
-                var_dump('percentage change = ' . $percentChange, $name);
+                // var_dump('percentage change = ' . $percentChange, $name);
          
                 if ($percentChange >= 1.00 || $percentChange < -5.00) {
                     $tradeName = $this->returnReverseTickerName($lastTradeMade);
