@@ -85,7 +85,7 @@ class BinanceService
                             2);
 
                         $trades['allTrades'][0]['current'] = $percentChangeTrade;
-                        User::find(1)->notify(new TelegramNotification('percentChangeTrade vs last buy' . $trades['allTrades'][0]['current']));
+                        // User::find(1)->notify(new TelegramNotification('percentChangeTrade vs last buy' . $trades['allTrades'][0]['current']));
                     }
                 }
 
