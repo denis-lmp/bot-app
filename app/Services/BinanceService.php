@@ -128,7 +128,7 @@ class BinanceService
             }
         }
 
-        User::find(1)->notify(new TelegramNotification(json_encode($trades[0])));
+        // User::find(1)->notify(new TelegramNotification(json_encode($trades[0])));
 
         return $trades;
     }
