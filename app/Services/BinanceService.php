@@ -158,7 +158,7 @@ class BinanceService
             if (((Carbon::now()->subMinutes(10)->toDateTimeString() > $lastTradeMade->created_at) &&
                  ($percentChangeTrade < -5.00)) ||
                 ($percentChangeTrade > 5.00) ||
-                $lastTradeMade->checks > 20000) {
+                $lastTradeMade->checks > 10000) {
                 $response = $this->api->cancel($lastTradeMade->ticker, $lastTradeMade->order_id);
                 $lastTradeMade->delete();
 
@@ -214,10 +214,10 @@ class BinanceService
                         if (env('APP_ENV') != 'local') {
                             if ($percentChange < -5.00 || $percentChange > 5.00) {
                                 User::find(1)->notify(new TelegramNotification('Market sell if %', $percentChange, $quantity, $value));
-                                // $order = $this->api->marketSell($lastTradeMade->ticker, $quantity);
+                                $order = $this->api->marketSell($lastTradeMade->ticker, $quantity);
                             } else {
                                 User::find(1)->notify(new TelegramNotification('Sell if %', $quantity, $value));
-                                // $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
+                                $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
                             }
 
                             //$order = $this->api->marketSell($lastTradeMade->ticker, $quantity);
@@ -331,7 +331,7 @@ class BinanceService
                         if (env('APP_ENV') != 'local') {
                             $order = $this->api->buy($name, $quantity, $value);
 
-                            $order = $this->api->marketBuy($name, $quantity);
+                            // $order = $this->api->marketBuy($name, $quantity);
                         } else {
                             $order            = array();
                             $order['orderId'] = '123456';
