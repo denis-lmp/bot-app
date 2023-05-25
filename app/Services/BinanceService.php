@@ -474,7 +474,9 @@ class BinanceService
             $ct->checks = 1;
             $ct->save();
 
-            return json_encode('Success.');
         }
+
+        return json_encode('Success.');
+
     }
 }
