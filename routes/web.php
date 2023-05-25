@@ -31,6 +31,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/testBuy', '\App\Http\Controllers\ToolsController@testBuy')->name('testBuy');
 
     Route::get('/orders', '\App\Http\Controllers\ToolsController@getOrders')->name('orders');
+    Route::get('/export-orders', '\App\Http\Controllers\ToolsController@exportOrders')->name('export-orders');
 
     Route::get('/profile', function () {
         //

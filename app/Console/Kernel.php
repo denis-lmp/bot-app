@@ -17,7 +17,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         // $schedule->command('inspire')->hourly();
-        $schedule->job(new CryptoBot())->everyMinute();
+        $schedule->job(new CryptoBot())->everyMinute()->appendOutputTo(storage_path('logs/inspire.log'));
 
     }
 

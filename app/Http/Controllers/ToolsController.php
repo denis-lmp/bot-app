@@ -48,4 +48,9 @@ class ToolsController extends Controller
         return $binanceService->getOrders();
     }
 
+    public function exportOrders(BinanceService $binanceService)
+    {
+        return $binanceService->exportOrdersToDatabase();
+    }
+
 }
