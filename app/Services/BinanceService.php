@@ -55,10 +55,10 @@ class BinanceService
                 $tradeArray          = array();
                 $cryptoTradingBotGet = new CryptoTradingBot;
 
-                // $oldTrades = $cryptoTradingBotGet->where('ticker', $name)->whereBetween('created_at',
-                //     [Carbon::now()->subMinutes(1)->toDateTimeString(), Carbon::now()])->orderBy('id')->first();
-                    $oldTrades = $cryptoTradingBotGet->where('ticker', $name)->whereBetween('created_at',
-                    [Carbon::now()->subHour(1)->toDateTimeString(), Carbon::now()])->orderBy('id')->first();
+                $oldTrades = $cryptoTradingBotGet->where('ticker', $name)->whereBetween('created_at',
+                    [Carbon::now()->subMinutes(1)->toDateTimeString(), Carbon::now()])->orderBy('id')->first();
+                    // $oldTrades = $cryptoTradingBotGet->where('ticker', $name)->whereBetween('created_at',
+                    // [Carbon::now()->subHour(1)->toDateTimeString(), Carbon::now()])->orderBy('id')->first();
 
                 //Check we have some trades in the system
                 if ($oldTrades) {
@@ -75,7 +75,7 @@ class BinanceService
 
                 }
                 
-                if ($lastTradeType == 'buy') {
+                if ($lastTradeType == 'BUY') {
                     //Get the name
                     $lastTradeTicker = $trades['allTrades'][0]['ticker'];
 
@@ -97,7 +97,7 @@ class BinanceService
                         //Check latest prices and make decision to sell
 
                         $traded = $this->checkLastTradeAndProcessToSell($lastTradeMade, $name, $value);
-                        // dd($traded);
+
                         //Check if trade has happened and buy
                         if (!$traded) {
                             $traded = $this->checkLastTradeAndProcessToBuy($lastTradeMade, $percentChange, $name, $value);
@@ -127,6 +127,7 @@ class BinanceService
                 $cryptoTradingBot         = new CryptoTradingBot();
                 $cryptoTradingBot->ticker = $name;
                 $cryptoTradingBot->price  = $value;
+                $cryptoTradingBot->percentage_change = $percentChangeTrade;
                 $cryptoTradingBot->save();
             }
         }
@@ -183,8 +184,7 @@ class BinanceService
 
     public function checkLastTradeAndProcessToSell($lastTradeMade, $name, $value): void
     {
-        // var_dump('ProcessToSell');
-        if ($lastTradeMade->ticker == $name && $lastTradeMade->buy_sell == 'buy') {
+        if ($lastTradeMade->ticker == $name && $lastTradeMade->buy_sell == 'BUY') {
             // //Get last trade to make sure it's still a buy to sell to avoid duops
             DB::transaction(function () use ($lastTradeMade, $name, $value) {
 
@@ -195,7 +195,6 @@ class BinanceService
 
                 $decreaseValue = $value - (float)$lastTradeMade->price;
                 $percentChange = round(($decreaseValue / $value) * 100, 2);
-
                 // var_dump('percentage change = ' . $percentChange, $name);
                 // dd($percentChange);
                 if ($percentChange >= 1.00 || $percentChange < -5.00) {
@@ -206,17 +205,17 @@ class BinanceService
                     $lastTradeMadeLive = CryptoTrading::orderBy('created_at', 'DESC')->first();
                     // dd($lastTradeMadeLive);
 
-                    if ($lastTradeMadeLive->buy_sell == 'buy') {
-                        $amount          = $this->getSellBalance(); // balance of BTC by default
-                        $quantity        = $this->calculateAvailableBuyQuantity()[0];
-                        $quantity = sprintf("%.6f", $quantity);
-
+                    if ($lastTradeMadeLive->buy_sell == 'BUY') {
+                        $quantity          = $this->getSellBalance(); // balance of BTC by default
+                        // $quantity        = $this->calculateAvailableBuyQuantity();
+                        $quantity = bcdiv((float)$quantity, 1, 4);
+                        // dd($quantity);
                         // $convertToString = (string)$quantity;
                         // $decimalLocation = strpos($convertToString, '.');
                         // $quantityStart   = substr($quantity, 0, $decimalLocation);
                         // $quantityEnd     = substr($quantity, $decimalLocation, 3);
                         // $quantity        = $quantityStart . $quantityEnd;
-                        // dd($amount['available'], $quantity);
+                        
                         //Sell Now
                         // dd(env('APP_ENV'));
                         // if (env('APP_ENV') != 'local') {
@@ -252,13 +251,13 @@ class BinanceService
                             //     //$order = $this->api->marketSell($lastTradeMade->ticker, $quantity);
                             // }
 
-                            // if (!isset($order['code'])) {
-                            //     if (!isset($order['orderId'])) {
-                            //         $orderId = '';
-                            //     } else {
-                            //         $orderId = $order['orderId'];
-                            //     }
-                            // }
+                            if (!isset($order['code'])) {
+                                if (!isset($order['orderId'])) {
+                                    $orderId = '';
+                                } else {
+                                    $orderId = $order['orderId'];
+                                }
+                            }
                         // } else {
                         //     $orderId = '123456';
                         //     return false;
@@ -268,7 +267,7 @@ class BinanceService
                             $cryptoTrading->ticker    = $name;
                             $cryptoTrading->price     = $value;
                             $cryptoTrading->old_price = $lastTradeMade->price;
-                            $cryptoTrading->buy_sell  = 'sell';
+                            $cryptoTrading->buy_sell  = 'SELL';
                             $cryptoTrading->amount    = $quantity;
                             $cryptoTrading->order_id  = $orderId;
                             $cryptoTrading->checks    = (int)$lastTradeMade->checks + 1;
@@ -327,23 +326,28 @@ class BinanceService
     public function checkLastTradeAndProcessToBuy($lastTradeMade, $percentageIncrease, $name, $value): void
     {
         // var_dump('BUY');
-        if ($lastTradeMade->buy_sell == 'sell' && $percentageIncrease <= -1.00) {
+        // dd($lastTradeMade->buy_sell, $percentageIncrease);
+        // if ($lastTradeMade->buy_sell == 'SELL' && $percentageIncrease <= -1.00) {
+        if ($lastTradeMade->buy_sell == 'SELL') {
+            // dd(124);
             // //Get last trade to make sure it's still a buy to sell to avoid duops
 
             DB::transaction(function () use ($lastTradeMade, $percentageIncrease, $name, $value) {
-
                 $cryptoTrading     = new CryptoTrading;
-                $btcBalance        = $this->getBTCBalance();
+                // $btcBalance        = $this->getBTCBalance();
+                $usdtBalance = $this->getUSDTBalance();
+
                 $cryptoTradingLive = new CryptoTrading;
                 $lastTradeMadeLive = $cryptoTradingLive->orderBy('created_at', 'DESC')->first();
-
-                if ($lastTradeMadeLive->buy_sell == 'sell') {
+                if ($lastTradeMadeLive->buy_sell == 'SELL') {
                     //Buy Now
-                    $quantity = (float)$btcBalance / (float)$value;
-                    $quantity = floor($quantity);
+
+                    $quantity = (float) $usdtBalance / (float)$value;
+                    $quantity = bcdiv((float)$quantity, 1, 5);
 
                     if ($quantity != 0) {
                         if (env('APP_ENV') != 'local') {
+                            User::find(1)->notify(new TelegramNotification('BUY if %', $percentageIncrease, $quantity, $value));
                             $order = $this->api->buy($name, $quantity, $value);
 
                             // $order = $this->api->marketBuy($name, $quantity);
@@ -356,9 +360,10 @@ class BinanceService
                             $cryptoTrading->ticker    = $name;
                             $cryptoTrading->price     = $value;
                             $cryptoTrading->old_price = '';
-                            $cryptoTrading->buy_sell  = 'buy';
+                            $cryptoTrading->buy_sell  = 'BUY';
                             $cryptoTrading->amount    = $quantity;
                             $cryptoTrading->order_id  = $order['orderId'];
+                            $cryptoTrading->checks = 1;
                             $cryptoTrading->save();
 
                             return true;
@@ -379,7 +384,10 @@ class BinanceService
 
     private function getUSDTBalance()
     {
-        return $this->api->balances('USDT');
+        $balances = $this->api->balances('USDT');
+        $balance = $balances['USDT']['available'] ?? null;
+
+        return round((float) $balance, 3);
         
     }
 
@@ -391,7 +399,8 @@ class BinanceService
         $balances = $this->api->balances($name);
 
         if (isset($balances[$name])) {
-            return $balances[$name];
+            $quantity = $balances[$name]['available'] ?? null;
+            return round((float) $quantity, 8);
         }
 
         return 'Balance checking error' . $balances;
