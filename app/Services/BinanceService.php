@@ -225,12 +225,12 @@ class BinanceService
                         // if (env('APP_ENV') != 'local') {
                             // dd(123);
                             if ($percentChange < -5.00 || $percentChange > 5.00) {
-                                User::find(1)->notify(new TelegramNotification('Market sell if %', $percentChange, $quantity, $value));
+                                User::find(1)->notify(new TelegramNotification('Market sell if % ' . $percentChange. ' ' . $quantity .' '. $value));
                                 // $order = $this->api->marketSell($lastTradeMade->ticker, $quantity);
                                 // dd($lastTradeMade->ticker, $quantity, $value);
                                 $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
                             } else {
-                                User::find(1)->notify(new TelegramNotification('Sell if %', $quantity, $value));
+                                User::find(1)->notify(new TelegramNotification('Sell if % ' . $quantity .' '. $value));
                                 $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
                             }
 
@@ -332,7 +332,7 @@ class BinanceService
         // var_dump('BUY');
         // dd($lastTradeMade->buy_sell, $percentageIncrease);
         // if ($lastTradeMade->buy_sell == 'SELL' && $percentageIncrease <= -1.00) {
-        if ($lastTradeMade->buy_sell == 'SELL') {
+        if ($lastTradeMade->buy_sell == 'SELL' && $lastTradeMade->order_id != '123456' && $percentageIncrease <= -2.00) {
             // dd(124);
             // //Get last trade to make sure it's still a buy to sell to avoid duops
 
@@ -351,7 +351,7 @@ class BinanceService
 
                     if ($quantity != 0) {
                         if (env('APP_ENV') != 'local') {
-                            User::find(1)->notify(new TelegramNotification('BUY if %', $percentageIncrease, $quantity, $value));
+                            User::find(1)->notify(new TelegramNotification('BUY if % ' . $percentageIncrease .' '. $quantity .' '. $value));
                             $order = $this->api->buy($name, $quantity, $value);
 
                             // $order = $this->api->marketBuy($name, $quantity);
