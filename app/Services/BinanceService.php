@@ -99,17 +99,13 @@ class BinanceService
                         $traded = $this->checkLastTradeAndProcessToSell($lastTradeMade, $name, $value);
 
                         //Check if trade has happened and buy
-//                        if (!$traded) {
-//                            $traded = $this->checkLastTradeAndProcessToBuy($lastTradeMade, $percentChange, $name, $value);
-//                        }
+                        if (!$traded) {
+                            $traded = $this->checkLastTradeAndProcessToBuy($lastTradeMade, $percentChange, $name, $value);
+                        }
 
                         //Create something to force sell if one is over 5% in 10 minutes
                         //Force Sell and buy immediately
                     }
-                }
-
-                if ($lastTradeMade->buy_sell == 'SELL' && $lastTradeMade->order_id != '123456' && $percentChange <= -3.00 ) {
-                    $traded = $this->checkLastTradeAndProcessToBuy($lastTradeMade, $percentChange, $name, $value);
                 }
 
                 //Create Ticker
