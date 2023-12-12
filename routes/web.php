@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CryptoTradingController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,6 +33,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/orders', '\App\Http\Controllers\ToolsController@getOrders')->name('orders');
     Route::get('/export-orders', '\App\Http\Controllers\ToolsController@exportOrders')->name('export-orders');
+
+    Route::resource('tradings', CryptoTradingController::class);
 
     Route::get('/profile', function () {
         //

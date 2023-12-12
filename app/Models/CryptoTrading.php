@@ -9,6 +9,8 @@ class CryptoTrading extends Model
 {
     use HasFactory;
 
+    protected $table = 'crypto_tradings';
+
     protected $fillable = [
         'order_id'
     ];
