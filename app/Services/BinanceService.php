@@ -272,7 +272,7 @@ class BinanceService
                             if (isset($order['orderId'])) {
                                 $cryptoTrading->ticker    = $name;
                                 $cryptoTrading->price     = $value;
-                                $cryptoTrading->old_price = $lastTradeMadeLive->price;
+                                $cryptoTrading->old_price = $lastTradeMadeLive->price ?? '';
                                 $cryptoTrading->buy_sell  = 'BUY';
                                 $cryptoTrading->amount    = $quantity;
                                 $cryptoTrading->order_id  = $order['orderId'];
@@ -390,7 +390,7 @@ class BinanceService
             $ct->ticker = $order->symbol ?? '';
             $ct->amount = $order->executedQty;
             $ct->price = $order->price;
-            $ct->old_price = $orders[$keyPast]->price ?? 'BTCUSDT';
+            $ct->old_price = $orders[$keyPast]->price ?? '';
             $ct->buy_sell = $order->side;
             $ct->order_id = $order->orderId;
             $ct->status = $order->status;
