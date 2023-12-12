@@ -171,7 +171,7 @@ class BinanceService
                         $quantity = bcdiv((float)$quantity, 1, 4);
 
                         User::find(1)->notify(new TelegramNotification('Sell if %'. $percentChange . ' ' . $quantity));
-//                        $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
+                        $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
 
 
                         if (!isset($order['code'])) {
@@ -263,7 +263,7 @@ class BinanceService
                         if ($quantity != 0) {
                             if (env('APP_ENV') != 'local') {
                                 User::find(1)->notify(new TelegramNotification('BUY if % '. $percentageIncrease . ' ' .  $quantity));
-//                                $order = $this->api->buy($name, $quantity, $value);
+                                $order = $this->api->buy($name, $quantity, $value);
                             } else {
                                 $order            = array();
                                 $order['orderId'] = '123456';
