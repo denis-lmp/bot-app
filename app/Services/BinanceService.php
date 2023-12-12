@@ -20,7 +20,7 @@ class BinanceService
 
     public function __construct()
     {
-        $this->api = new API(Env::get('BINANCE_API_KEY'), Env::get('BINANCE_SECRET'));
+        $this->api = new API(config('binance.binance_api'), config('binance.binance_secret'));
     }
 
     /**
