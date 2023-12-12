@@ -159,7 +159,7 @@ class BinanceService
                 $decreaseValue = $value - (float)$lastTradeMade->price;
                 $percentChange = round(($decreaseValue / $value) * 100, 2);
 
-                if ($percentChange >= 1.00 || $percentChange < -3.00) {
+                if ($percentChange >= 1.00) {
                     // $tradeName = $this->returnReverseTickerName($lastTradeMade);
 
                     // //Get last trade to make sure it's still a buy to sell to avoid duops
