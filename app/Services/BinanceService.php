@@ -339,10 +339,6 @@ class BinanceService implements BinanceServiceInterface
     {
         $quantity = 0.00047;
 
-        // $info = $this->api->exchangeInfo();
-        // dd($info['symbols'][$this->allowedCrypto[0]]);
-
-
         $tickers = $this->api->prices();
 
         $currentPrice = $tickers[$this->allowedCrypto[0]] ?? null;

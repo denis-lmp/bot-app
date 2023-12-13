@@ -267,7 +267,6 @@ abstract class AbstractEloquentRepository implements BaseRepository
      */
     protected function applyDateCriteria($queryBuilder, $startDate, $endDate): mixed
     {
-//        dd($queryBuilder->whereBetween('created_at', [$startDate, $endDate])->toSql(), [$startDate, $endDate]);
         return $queryBuilder->whereBetween('created_at', [$startDate, $endDate])->get();
     }
 
