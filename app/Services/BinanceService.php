@@ -4,23 +4,25 @@ namespace App\Services;
 
 use App\Models\CryptoTrading;
 use App\Models\CryptoTradingBot;
-Use App\Models\User;
+use App\Models\User;
+use App\Notifications\TelegramNotification;
+use App\Repositories\Contracts\BinanceServiceInterface;
+use App\Repositories\CryptoTradingRepository;
 use Binance\API;
-Use Auth;
 use Carbon\Carbon;
 use Exception;
-use Illuminate\Support\Env;
 use Illuminate\Support\Facades\DB;
-use \App\Notifications\TelegramNotification;
 
-class BinanceService
+class BinanceService implements BinanceServiceInterface
 {
     protected API $api;
+    protected CryptoTradingRepository $cryptoTradingRepository;
     protected string $allowedCrypto = 'BTCUSDT';
 
-    public function __construct()
+    public function __construct(CryptoTradingRepository $cryptoTradingRepository)
     {
-        $this->api = new API(config('binance.binance_api'), config('binance.binance_secret'));
+        $this->cryptoTradingRepository = $cryptoTradingRepository;
+        $this->api                     = new API(config('binance.binance_api'), config('binance.binance_secret'));
     }
 
     /**
@@ -28,83 +30,102 @@ class BinanceService
      */
     public function getCheckTradingBids(): array
     {
-        //Get all prices via the API
-        $ticker = $this->api->prices();
         $trades = array();
 
-        $cryptoTrading = new CryptoTrading();
+        $trades['allTrades'] = $this->cryptoTradingRepository->getAllOrdered('created_at', 'DESC');
 
-        //Get all the trades actually sent
-        $allTradesMade = $cryptoTrading->orderBy('created_at', 'DESC')->first();
-        $trades['allTrades'] = $allTradesMade;
+        $lastMadeTrade = $this->cryptoTradingRepository->getLastMadeTrade('created_at', 'DESC');
 
-        if (isset($ticker[$this->allowedCrypto])) {
-            $name = $this->allowedCrypto;
-            $value = $ticker[$this->allowedCrypto];
+        $price = $this->getTickerPrice($this->allowedCrypto);
 
-            $traded             = false;
-            $percentChange      = 0;
-            $oldPrice           = 0;
-            $percentChangeTrade = 0;
-
-            //Get last trade made
-            $lastTradeMade = $cryptoTrading->orderBy('created_at', 'DESC')->first();
-
-            $tradeArray = array();
-
-            //Check we have some trades in the system
-            if ($lastTradeMade) {
-                //Get the percentage change between now and 10 mins ago
-                $oldPrice      = $lastTradeMade->price;
-                $decreaseValue = $value - $lastTradeMade->price;
-                $percentChange = round(($decreaseValue / $lastTradeMade->price) * 100, 2);
-            }
-
-            //Here we will check if last was a buy and if so show percentage increase
-            $lastTradeType = '';
-
-            if (isset($trades['allTrades'])) {
-                $lastTradeType = $trades['allTrades']->buy_sell;
-
-            }
-
-            if ($lastTradeMade && $lastTradeMade->order_id != '123456' && $lastTradeMade->buy_sell == 'BUY') {
-                if ($this->checkIfLastOrderProcessed($lastTradeMade, $percentChange)) {
-                    //Check latest prices and make decision to sell
-                    $traded = $this->checkLastTradeAndProcessToSell($lastTradeMade, $name, $value);
-                }
-            } else {
-                $traded = $this->checkLastTradeAndProcessToBuy($lastTradeMade, $percentChange, $name, $value);
-            }
-
-            //Create Ticker
-            $tradeArray['ticker']   = $name;
-            $tradeArray['gain']     = $percentChange . '%';
-            $tradeArray['oldValue'] = $oldPrice;
-            $tradeArray['latest']   = $value;
-
-
-            if (!$traded) {
-                $tradeArray['traded'] = 'No';
-            } else {
-                $tradeArray['traded'] = 'Yes';
-            }
-
-            //Push to array
-            array_push($trades, $tradeArray);
-
-            //Save the latest Trade
-            $cryptoTradingBot         = new CryptoTradingBot();
-            $cryptoTradingBot->ticker = $name;
-            $cryptoTradingBot->price  = $value;
-            $cryptoTradingBot->percentage_change = $percentChange;
-            $cryptoTradingBot->save();
+        if (!$price) {
+            return $trades;
         }
+
+        return $this->processTrades($trades, $lastMadeTrade, $price);
+    }
+
+    /**
+     * @param $ticker
+     * @return float|null
+     */
+    private function getTickerPrice($ticker): ?float
+    {
+        $prices = $this->getTickerPrices();
+
+        return $prices[$ticker] ?? null;
+    }
+
+    /**
+     * Retrieves ticker prices from the API.
+     *
+     * @return array An array containing the ticker prices.
+     *               The array will be empty if the API call fails.
+     */
+    private function getTickerPrices(): array
+    {
+        try {
+            return $this->api->prices();
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @param  array  $trades
+     * @param $lastTradeMade
+     * @param $currentPrice
+     * @return array
+     * @throws Exception
+     */
+    private function processTrades(array $trades, $lastTradeMade, $currentPrice): array
+    {
+        $percentChange = 0;
+
+        if ($lastTradeMade) {
+            $percentChange = $this->calculatePercentChange($lastTradeMade->price, $currentPrice);
+            $this->processLastTrade($lastTradeMade, $this->allowedCrypto, $currentPrice, $percentChange);
+        }
+
+        $this->saveLatestTrade($this->allowedCrypto, $currentPrice, $percentChange);
 
         return $trades;
     }
 
+    private function calculatePercentChange($oldPrice, $newPrice): float
+    {
+        if ($oldPrice == 0) {
+            return 0;
+        }
+        $decreaseValue = $newPrice - $oldPrice;
+        return round(($decreaseValue / $oldPrice) * 100, 2);
+    }
+
     /**
+     * @param $lastTradeMade
+     * @param $ticker
+     * @param $currentPrice
+     * @param $percentChange
+     * @return void
+     * @throws Exception
+     */
+    private function processLastTrade($lastTradeMade, $ticker, $currentPrice, $percentChange): void
+    {
+        if ($lastTradeMade->buy_sell == 'BUY') {
+            if ($this->checkIfLastOrderProcessed($lastTradeMade, $percentChange)) {
+                $this->processToSell($lastTradeMade, $ticker, $currentPrice);
+            }
+        } else {
+            if ($this->checkIfLastOrderProcessed($lastTradeMade, $percentChange)) {
+                $this->processToBuy($lastTradeMade, $ticker, $currentPrice);
+            }
+        }
+    }
+
+    /**
+     * @param $lastTradeMade
+     * @param $percentChangeTrade
+     * @return bool
      * @throws Exception
      */
     private function checkIfLastOrderProcessed($lastTradeMade, $percentChangeTrade): bool
@@ -114,11 +135,14 @@ class BinanceService
             return true;
         }
 
-        //If not filled check the system
-        $orderstatus = $this->api->orderStatus($lastTradeMade->ticker, $lastTradeMade->order_id);
+        try {
+            $orderStatus = $this->api->orderStatus($lastTradeMade->ticker, $lastTradeMade->order_id);
+        } catch (Exception $e) {
+            $orderStatus = [];
+        }
 
         //If filled then we can carry on
-        if ($orderstatus['status'] == 'FILLED') {
+        if ($orderStatus['status'] == 'FILLED') {
             //If filled mark as filled and save
             $lastTradeMade->status = 'FILLED';
             $lastTradeMade->save();
@@ -126,10 +150,7 @@ class BinanceService
             return true;
         } else {
             //If checks over 500 then delete the old order and carry on
-            if (((Carbon::now()->subMinutes(10)->toDateTimeString() > $lastTradeMade->created_at) &&
-                 ($percentChangeTrade < -5.00)) ||
-                ($percentChangeTrade > 5.00) ||
-                $lastTradeMade->checks > 10000) {
+            if (((Carbon::now()->subMinutes(10)->toDateTimeString() > $lastTradeMade->created_at) && ($percentChangeTrade < -5.00)) || ($percentChangeTrade > 5.00) || $lastTradeMade->checks > 10000) {
                 $response = $this->api->cancel($lastTradeMade->ticker, $lastTradeMade->order_id);
                 $lastTradeMade->delete();
 
@@ -142,143 +163,132 @@ class BinanceService
             //If not add one more check for filled
             $lastTradeMade->checks = (int)$lastTradeMade->checks + 1;
             $lastTradeMade->save();
-
         }
 
         //Return false as we still have an order
         return false;
     }
 
-    public function checkLastTradeAndProcessToSell($lastTradeMade, $name, $value): void
+    private function processToSell($lastTradeMade, string $name, float $currentPrice): void
     {
         if ($lastTradeMade->ticker == $name && $lastTradeMade->buy_sell == 'BUY') {
-            // //Get last trade to make sure it's still a buy to sell to avoid duops
-            DB::transaction(function () use ($lastTradeMade, $name, $value) {
-
+            DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
                 $cryptoTrading = new CryptoTrading();
-                $decreaseValue = $value - (float)$lastTradeMade->price;
-                $percentChange = round(($decreaseValue / $value) * 100, 2);
+
+                $decreaseValue = $currentPrice - (float)$lastTradeMade->price;
+                $percentChange = round(($decreaseValue / $currentPrice) * 100, 2);
 
                 if ($percentChange >= 1.00) {
-                    // $tradeName = $this->returnReverseTickerName($lastTradeMade);
+                    $balance = $this->getSellBalance();
 
-                    // //Get last trade to make sure it's still a buy to sell to avoid duops
-                    $lastTradeMadeLive = CryptoTrading::orderBy('created_at', 'DESC')->first();
-                    // dd($lastTradeMadeLive);
+                    $quantity = $this->calculateQuantity($balance);
 
-                    if ($lastTradeMadeLive->buy_sell == 'BUY') {
-                        $quantity          = $this->getSellBalance(); // balance of BTC by default
-                        $quantity = bcdiv((float)$quantity, 1, 4);
-
-                        User::find(1)->notify(new TelegramNotification('Sell if %'. $percentChange . ' ' . $quantity));
-                        $order = $this->api->sell($lastTradeMade->ticker, $quantity, $value);
-
-
-                        if (!isset($order['code'])) {
-                            if (!isset($order['orderId'])) {
-                                $orderId = '';
-                            } else {
-                                $orderId = $order['orderId'];
-                            }
-                        }
-                        $quantity = bcdiv((float)$quantity, 1, 4);
-                        if (isset($orderId)) {
-                            $cryptoTrading->ticker    = $name;
-                            $cryptoTrading->price     = $value;
-                            $cryptoTrading->old_price = $lastTradeMade->price;
-                            $cryptoTrading->buy_sell  = 'SELL';
-                            $cryptoTrading->amount    = $quantity;
-                            $cryptoTrading->order_id  = $orderId;
-                            $cryptoTrading->checks    = (int)$lastTradeMade->checks + 1;
-                            $cryptoTrading->save();
-
-                            $cryptoTradingBot = new CryptoTradingBot();
-                            $cryptoTradingBot->where('ticker', $name)->delete();
-
-                            return false;
-                        }
+                    $orderId = $this->placeSellOrder($lastTradeMade->ticker, $quantity, $currentPrice, $percentChange);
+                    if (isset($orderId)) {
+                        $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMade->price, $quantity,
+                            $orderId, (int)$lastTradeMade->checks + 1);
+                        CryptoTradingBot::where('ticker', $name)->delete();
+                        return true;
                     }
                 }
             });
         }
     }
 
-    private function returnReverseTickerName($lastTradeMade, $justTickerName = false): string
+    /**
+     * Check for profile balance
+     */
+    public function getSellBalance(string $name = 'BTC'): float|string
     {
-        $ticker = 'SCBTC';
-
-        if (isset($lastTradeMade->ticker)) {
-            $ticker = $lastTradeMade->ticker;
-        } else {
-            if ($justTickerName) {
-                $ticker = $lastTradeMade;
-            }
+        try {
+            $balances = $this->api->balances($name);
+        } catch (Exception $e) {
+            $balances = [];
         }
 
-        //Check if ticker is 2,3 or 4 lenght ticker
-        if (substr($ticker, 3, 4) == 'BTC') {
-            //Switch around Name to get back to BTC from 3 char ticker
-            $firstTicker  = substr($ticker, 0, 3);
-            $secondTicker = substr($ticker, 3, 4);
-        } else {
-            if (substr($ticker, 2, 4) == 'BTC') {
-                //Switch around Name to get back to BTC from 2 char ticker
-                $firstTicker  = substr($ticker, 0, 2);
-                $secondTicker = substr($ticker, 2, 4);
-            } else {
-                //Switch around Name SALTBTC to get back to BTC 4 char ticker
-                $firstTicker  = substr($ticker, 0, 4);
-                $secondTicker = substr($ticker, 4, 6);
-            }
+        if (isset($balances[$name])) {
+            $quantity = $balances[$name]['available'] ?? null;
+            return round((float)$quantity, 8);
         }
 
-        //Trade Name
-        $tradeName = $secondTicker . $firstTicker;
-
-        if ($justTickerName) {
-            return $firstTicker;
-        }
-
-        return $tradeName;
+        return 'Balance checking error';
     }
 
-    public function checkLastTradeAndProcessToBuy($lastTradeMade, $percentageIncrease, $name, $value): void
+    private function calculateQuantity(float $quantity): string
+    {
+        // Define a small value that we consider "close to zero"
+        $smallValue = 1E-5;
+
+        // If calculated quantity is effectively zero, do something (like throw an exception, return a specific value, etc.)
+        if ($quantity < $smallValue) {
+            throw new Exception('Quantity is too small');
+        }
+
+        return bcdiv($quantity, 1, 4);
+    }
+
+    private function placeSellOrder(string $name, string $quantity, float $value, $percentChange)
+    {
+        User::find(1)->notify(new TelegramNotification('Sell if %'.$percentChange.' '.$quantity));
+
+        $order = $this->api->sell($name, $quantity, $value);
+
+        return $order['orderId'] ?? '';
+    }
+
+    /**
+     * @param  CryptoTrading  $cryptoTrading
+     * @param $ticker
+     * @param $price
+     * @param $oldPrice
+     * @param $quantity
+     * @param $orderId
+     * @param $checks
+     * @return void
+     */
+    private function saveTrading(
+        CryptoTrading $cryptoTrading,
+        $ticker,
+        $price,
+        $oldPrice,
+        $quantity,
+        $orderId,
+        $checks
+    ): void {
+        $cryptoTrading->ticker    = $ticker;
+        $cryptoTrading->price     = $price;
+        $cryptoTrading->old_price = $oldPrice;
+        $cryptoTrading->buy_sell  = 'SELL';
+        $cryptoTrading->amount    = $quantity;
+        $cryptoTrading->order_id  = $orderId;
+        $cryptoTrading->checks    = (int)$checks;
+
+        $cryptoTrading->save();
+    }
+
+    private function processToBuy($lastTradeMade, string $name, float $currentPrice): void
     {
         if ($lastTradeMade->buy_sell == 'SELL') {
-            // //Get last trade to make sure it's still a buy to sell to avoid duops
+            DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
+                $cryptoTrading = new CryptoTrading();
 
-            DB::transaction(function () use ($lastTradeMade, $percentageIncrease, $name, $value) {
-
-                $cryptoTrading     = new CryptoTrading;
                 $usdtBalance = $this->getUSDTBalance();
 
-                $cryptoTradingLive = new CryptoTrading;
-                $lastTradeMadeLive = $cryptoTradingLive->orderBy('created_at', 'DESC')->first();
+                $lastTradeMadeLive = $cryptoTrading->orderBy('created_at', 'DESC')->first();
 
                 if ($lastTradeMadeLive->buy_sell == 'SELL') {
-                    if ($percentageIncrease < -1.00) {
-                        $quantity = (float) $usdtBalance / (float)$value;
-                        $quantity = bcdiv((float)$quantity, 1, 5);
+                    $percentChange = $this->calculatePercentChange($lastTradeMadeLive->price, $currentPrice);
 
-                        if ($quantity != 0) {
-                            if (env('APP_ENV') != 'local') {
-                                User::find(1)->notify(new TelegramNotification('BUY if % '. $percentageIncrease . ' ' .  $quantity));
-                                $order = $this->api->buy($name, $quantity, $value);
-                            } else {
-                                $order            = array();
-                                $order['orderId'] = '123456';
-                            }
+                    if ($percentChange < -1.00) {
+                        $quantity = $this->calculateQuantity($usdtBalance / $currentPrice);
 
-                            if (isset($order['orderId'])) {
-                                $cryptoTrading->ticker    = $name;
-                                $cryptoTrading->price     = $value;
-                                $cryptoTrading->old_price = $lastTradeMadeLive->price ?? '';
-                                $cryptoTrading->buy_sell  = 'BUY';
-                                $cryptoTrading->amount    = $quantity;
-                                $cryptoTrading->order_id  = $order['orderId'];
-                                $cryptoTrading->checks = 1;
-                                $cryptoTrading->save();
+                        if ($quantity) {
+                            $orderId = $this->placeBuyOrder($lastTradeMade->ticker, $quantity, $currentPrice,
+                                $percentChange);
 
+                            if ($orderId) {
+                                $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMadeLive->price,
+                                    $quantity, $orderId, 'BUY');
                                 return true;
                             }
                         }
@@ -288,36 +298,30 @@ class BinanceService
         }
     }
 
-    /**
-     * @throws Exception
-     */
-    private function getBTCBalance()
-    {
-        return $this->api->price('BTCUSDT');
-    }
-
     private function getUSDTBalance()
     {
         $balances = $this->api->balances('USDT');
-        $balance = $balances['USDT']['available'] ?? null;
+        $balance  = $balances['USDT']['available'] ?? null;
 
-        return round((float) $balance, 3);
-        
+        return round((float)$balance, 3);
     }
 
-    /**
-     * Check for profile balance
-     */
-    public function getSellBalance(string $name = 'BTC')
+    private function placeBuyOrder(string $name, string $quantity, float $currentPrice, $percentChange)
     {
-        $balances = $this->api->balances($name);
+        User::find(1)->notify(new TelegramNotification('BUY if % '.$percentChange.' '.$quantity));
 
-        if (isset($balances[$name])) {
-            $quantity = $balances[$name]['available'] ?? null;
-            return round((float) $quantity, 8);
-        }
+        $order = $this->api->buy($name, $quantity, $currentPrice);
 
-        return 'Balance checking error' . $balances;
+        return $order['orderId'] ?? '';
+    }
+
+    private function saveLatestTrade($ticker, $price, $percentChange): void
+    {
+        $cryptoTradingBot                    = new CryptoTradingBot();
+        $cryptoTradingBot->ticker            = $ticker;
+        $cryptoTradingBot->price             = $price;
+        $cryptoTradingBot->percentage_change = $percentChange;
+        $cryptoTradingBot->save();
     }
 
     /**
@@ -326,11 +330,6 @@ class BinanceService
     public function getPrice(string $name = 'BTCUSDT')
     {
         return $this->api->price($name);
-    }
-
-    public function getOrders(string $name = 'BTCUSDT')
-    {
-        return json_encode($this->api->orders($name));
     }
 
     /**
@@ -347,7 +346,7 @@ class BinanceService
         $tickers = $this->api->prices();
 
         $currentPrice = $tickers[$this->allowedCrypto[0]] ?? null;
-        $quantity = sprintf("%.6f", $quantity);
+        $quantity     = sprintf("%.6f", $quantity);
 
         return $this->api->sell($ticker, $quantity, $currentPrice);
     }
@@ -357,7 +356,7 @@ class BinanceService
      */
     public function testBuy(string $ticker = 'BTCUSDT', int $value = 0)
     {
-        $q = $this->calculateAvailableBuyQuantity();
+        $q        = $this->calculateAvailableBuyQuantity();
         $quantity = sprintf("%.6f", $q[0]);
 
         $order = $this->api->buy($ticker, $quantity, $q[1] ?? 0);
@@ -372,9 +371,9 @@ class BinanceService
             $usdtBalance = $usdtBalance['USDT']['available'];
         }
 
-        $tickers = $this->api->prices();
+        $tickers      = $this->api->prices();
         $currentPrice = $tickers[$this->allowedCrypto[0]] ?? null;
-        $quantity = round((float) $usdtBalance / (float) $currentPrice, 5);
+        $quantity     = round((float)$usdtBalance / (float)$currentPrice, 5);
 
         return [$quantity ?? null, $currentPrice];
     }
@@ -384,22 +383,33 @@ class BinanceService
         $orders = $this->getOrders();
         $orders = json_decode($orders);
         foreach ($orders as $key => $order) {
-            $keyPast = $key - 1 ?? 0;
-            $ct = new CryptoTrading();
-            $ct->order_id = $order->orderId;
-            $ct->ticker = $order->symbol ?? '';
-            $ct->amount = $order->executedQty;
-            $ct->price = $order->price;
+            $keyPast       = $key - 1 ?? 0;
+            $ct            = new CryptoTrading();
+            $ct->order_id  = $order->orderId;
+            $ct->ticker    = $order->symbol ?? '';
+            $ct->amount    = $order->executedQty;
+            $ct->price     = $order->price;
             $ct->old_price = $orders[$keyPast]->price ?? '';
-            $ct->buy_sell = $order->side;
-            $ct->order_id = $order->orderId;
-            $ct->status = $order->status;
-            $ct->checks = 1;
+            $ct->buy_sell  = $order->side;
+            $ct->order_id  = $order->orderId;
+            $ct->status    = $order->status;
+            $ct->checks    = 1;
             $ct->save();
-
         }
 
         return json_encode('Success.');
+    }
 
+    public function getOrders(string $name = 'BTCUSDT')
+    {
+        return json_encode($this->api->orders($name));
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function getBTCBalance()
+    {
+        return $this->api->price('BTCUSDT');
     }
 }

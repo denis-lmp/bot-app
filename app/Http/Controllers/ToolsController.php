@@ -2,25 +2,36 @@
 
 namespace App\Http\Controllers;
 
+use App\Repositories\Contracts\BinanceServiceInterface;
 use App\Services\BinanceService;
-use Binance\API;
 use Exception;
-use Illuminate\Http\Request;
-use Illuminate\Support\Env;
 
 class ToolsController extends Controller
 {
     /**
+     * @var BinanceService|BinanceServiceInterface
+     */
+    protected BinanceService|BinanceServiceInterface $binanceService;
+
+    /**
+     * @param  BinanceServiceInterface  $binanceService
+     */
+    public function __construct(BinanceServiceInterface $binanceService)
+    {
+        $this->binanceService = $binanceService;
+    }
+
+    /**
+     * @return array
      * @throws Exception
      */
     public function getCheckTradingBids(): array
     {
-        return (new BinanceService())->getCheckTradingBids();
-        // return $binanceService->getCheckTradingBids();
+        return $this->binanceService->getCheckTradingBids();
     }
 
     /**
-     * 
+     *
      */
     public function getBalance(BinanceService $binanceService, $coin)
     {
