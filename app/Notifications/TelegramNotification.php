@@ -12,10 +12,9 @@ class TelegramNotification extends Notification
 {
     use Queueable;
 
-    /**
-     * 
-     */
     private string $content;
+
+    private mixed $chatId;
 
     /**
      * Create a new notification instance.
@@ -25,6 +24,7 @@ class TelegramNotification extends Notification
     public function __construct($content)
     {
         $this->content = $content;
+        $this->chatId = config('services.telegram_chat_id');
     }
 
     /**
@@ -41,7 +41,7 @@ class TelegramNotification extends Notification
     public function toTelegram()
    {
       return TelegramMessage::create()
-          ->to('-928835721')
+          ->to($this->chatId)
           ->content($this->content);
    }
 

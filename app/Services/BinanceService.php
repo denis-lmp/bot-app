@@ -2,27 +2,43 @@
 
 namespace App\Services;
 
+use App\Jobs\SendTelegramNotification;
 use App\Models\CryptoTrading;
 use App\Models\CryptoTradingBot;
 use App\Models\User;
 use App\Notifications\TelegramNotification;
 use App\Repositories\Contracts\BinanceServiceInterface;
+use App\Repositories\CryptoTradingBotRepository;
 use App\Repositories\CryptoTradingRepository;
 use Binance\API;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 
 class BinanceService implements BinanceServiceInterface
 {
+    const STATUS_SUCCESS    = 'FILLED';
+    const STATUS_PROCESSING = 'PROCESSING';
+
+    const BUY_STATUS  = 'BUY';
+    const SELL_STATUS = 'SELL';
+
     protected API $api;
     protected CryptoTradingRepository $cryptoTradingRepository;
+    protected CryptoTradingBotRepository $cryptoTradingBotRepository;
+
     protected string $allowedCrypto = 'BTCUSDT';
 
-    public function __construct(CryptoTradingRepository $cryptoTradingRepository)
-    {
-        $this->cryptoTradingRepository = $cryptoTradingRepository;
-        $this->api                     = new API(config('binance.binance_api'), config('binance.binance_secret'));
+    public function __construct(
+        CryptoTradingRepository $cryptoTradingRepository,
+        CryptoTradingBotRepository $cryptoTradingBotRepository
+    ) {
+        $this->cryptoTradingRepository    = $cryptoTradingRepository;
+        $this->cryptoTradingBotRepository = $cryptoTradingBotRepository;
+
+        $this->api = new API(config('binance.binance_api'), config('binance.binance_secret'));
     }
 
     /**
@@ -111,7 +127,7 @@ class BinanceService implements BinanceServiceInterface
      */
     private function processLastTrade($lastTradeMade, $ticker, $currentPrice, $percentChange): void
     {
-        if ($lastTradeMade->buy_sell == 'BUY') {
+        if ($lastTradeMade->buy_sell == self::BUY_STATUS) {
             if ($this->checkIfLastOrderProcessed($lastTradeMade, $percentChange)) {
                 $this->processToSell($lastTradeMade, $ticker, $currentPrice);
             }
@@ -131,7 +147,7 @@ class BinanceService implements BinanceServiceInterface
     private function checkIfLastOrderProcessed($lastTradeMade, $percentChangeTrade): bool
     {
         //Check if the status is filled of the last job
-        if ($lastTradeMade->status == 'FILLED') {
+        if ($lastTradeMade->status == self::STATUS_SUCCESS) {
             return true;
         }
 
@@ -142,9 +158,9 @@ class BinanceService implements BinanceServiceInterface
         }
 
         //If filled then we can carry on
-        if ($orderStatus['status'] == 'FILLED') {
+        if ($orderStatus['status'] == self::STATUS_SUCCESS) {
             //If filled mark as filled and save
-            $lastTradeMade->status = 'FILLED';
+            $lastTradeMade->status = self::STATUS_SUCCESS;
             $lastTradeMade->save();
 
             return true;
@@ -157,7 +173,7 @@ class BinanceService implements BinanceServiceInterface
                 return true;
             }
 
-            $lastTradeMade->status = 'PROCESSING';
+            $lastTradeMade->status = self::STATUS_PROCESSING;
             $lastTradeMade->save();
 
             //If not add one more check for filled
@@ -171,9 +187,10 @@ class BinanceService implements BinanceServiceInterface
 
     private function processToSell($lastTradeMade, string $name, float $currentPrice): void
     {
-        if ($lastTradeMade->ticker == $name && $lastTradeMade->buy_sell == 'BUY') {
+        if ($lastTradeMade->ticker == $name && $lastTradeMade->buy_sell == self::BUY_STATUS) {
             DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
-                $cryptoTrading = new CryptoTrading();
+
+                $cryptoTrading = $this->cryptoTradingRepository->getModel();
 
                 $decreaseValue = $currentPrice - (float)$lastTradeMade->price;
                 $percentChange = round(($decreaseValue / $currentPrice) * 100, 2);
@@ -183,16 +200,88 @@ class BinanceService implements BinanceServiceInterface
 
                     $quantity = $this->calculateQuantity($balance);
 
-                    $orderId = $this->placeSellOrder($lastTradeMade->ticker, $quantity, $currentPrice, $percentChange);
+                    $orderId = null;
+                    if ($quantity) {
+                        $orderId = $this->placeSellOrder($lastTradeMade->ticker, $quantity, $currentPrice,
+                            $percentChange);
+                    }
+
                     if (isset($orderId)) {
                         $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMade->price, $quantity,
-                            $orderId, (int)$lastTradeMade->checks + 1);
-                        CryptoTradingBot::where('ticker', $name)->delete();
+                            $orderId, (int)$lastTradeMade->checks + 1, self::BUY_STATUS);
+
+                        $this->deleteRaw($name);
+
                         return true;
                     }
                 }
             });
         }
+    }
+
+    private function processToBuy($lastTradeMade, string $name, float $currentPrice): void
+    {
+        if ($lastTradeMade->buy_sell == self::SELL_STATUS) {
+            DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
+                $usdtBalance = $this->getUSDTBalance();
+
+                $cryptoTrading = $this->cryptoTradingRepository->getModel();
+
+                $lastTradeMadeLive = $this->cryptoTradingRepository->getLastMadeTrade('created_at', 'DESC');
+
+                if ($lastTradeMadeLive->buy_sell == self::SELL_STATUS) {
+                    $percentChange = $this->calculatePercentChange($lastTradeMadeLive->price, $currentPrice);
+
+                    if ($percentChange < -1.00) {
+                        $quantity = $this->calculateQuantity($usdtBalance / $currentPrice);
+
+                        $orderId = null;
+                        if ($quantity) {
+                            $orderId = $this->placeBuyOrder($lastTradeMade->ticker, $quantity, $currentPrice,
+                                $percentChange);
+
+                            if (isset($orderId)) {
+                                $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMadeLive->price,
+                                    $quantity, $orderId, (int)$lastTradeMade->checks + 1, self::SELL_STATUS);
+
+                                return true;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * @param  string  $name
+     * @param  string  $quantity
+     * @param  float  $value
+     * @param $percentChange
+     * @return mixed|string
+     */
+    private function placeSellOrder(string $name, string $quantity, float $value, $percentChange): mixed
+    {
+
+        $order = $this->api->sell($name, $quantity, $value);
+        $this->sendNotification('SELLING - % changed for ', $percentChange, $quantity, $order['orderId'] ?? '');
+
+        return $order['orderId'] ?? '';
+    }
+
+    /**
+     * @param  string  $name
+     * @param  string  $quantity
+     * @param  float  $currentPrice
+     * @param $percentChange
+     * @return mixed|string
+     */
+    private function placeBuyOrder(string $name, string $quantity, float $currentPrice, $percentChange): mixed
+    {
+        $order = $this->api->buy($name, $quantity, $currentPrice);
+        $this->sendNotification('BUYING - % changed for ', $percentChange, $quantity, $order['orderId'] ?? '');
+
+        return $order['orderId'] ?? '';
     }
 
     /**
@@ -214,27 +303,29 @@ class BinanceService implements BinanceServiceInterface
         return 'Balance checking error';
     }
 
-    private function calculateQuantity(float $quantity): string
+    /**
+     * @param  float  $quantity
+     * @return bool|string
+     */
+    private function calculateQuantity(float $quantity): bool|string
     {
         // Define a small value that we consider "close to zero"
-        $smallValue = 1E-5;
+        $smallValue = 1E-4;
 
         // If calculated quantity is effectively zero, do something (like throw an exception, return a specific value, etc.)
         if ($quantity < $smallValue) {
-            throw new Exception('Quantity is too small');
+            $this->sendNotification('Error while calculating quantity');
+            return false;
         }
 
-        return bcdiv($quantity, 1, 4);
+        return bcdiv($quantity, 1, 4) ?? false;
     }
 
-    private function placeSellOrder(string $name, string $quantity, float $value, $percentChange)
+    private function sendNotification(string $message, string $percentChange = '', string $quantity = '', $orderId = null): void
     {
-        User::find(1)->notify(new TelegramNotification('Sell if %'.$percentChange.' '.$quantity));
-
-        $order = $this->api->sell($name, $quantity, $value);
-
-        return $order['orderId'] ?? '';
+        SendTelegramNotification::dispatch($message.' Change: '.$percentChange.' '.$quantity.' orderId = '.$orderId);
     }
+
 
     /**
      * @param  CryptoTrading  $cryptoTrading
@@ -244,21 +335,23 @@ class BinanceService implements BinanceServiceInterface
      * @param $quantity
      * @param $orderId
      * @param $checks
+     * @param $status
      * @return void
      */
     private function saveTrading(
-        CryptoTrading $cryptoTrading,
+        Model $cryptoTrading,
         $ticker,
         $price,
         $oldPrice,
         $quantity,
         $orderId,
-        $checks
+        $checks,
+        $status
     ): void {
         $cryptoTrading->ticker    = $ticker;
         $cryptoTrading->price     = $price;
         $cryptoTrading->old_price = $oldPrice;
-        $cryptoTrading->buy_sell  = 'SELL';
+        $cryptoTrading->buy_sell  = $status;
         $cryptoTrading->amount    = $quantity;
         $cryptoTrading->order_id  = $orderId;
         $cryptoTrading->checks    = (int)$checks;
@@ -266,36 +359,10 @@ class BinanceService implements BinanceServiceInterface
         $cryptoTrading->save();
     }
 
-    private function processToBuy($lastTradeMade, string $name, float $currentPrice): void
+    private function deleteRaw(string $name): void
     {
-        if ($lastTradeMade->buy_sell == 'SELL') {
-            DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
-                $cryptoTrading = new CryptoTrading();
-
-                $usdtBalance = $this->getUSDTBalance();
-
-                $lastTradeMadeLive = $cryptoTrading->orderBy('created_at', 'DESC')->first();
-
-                if ($lastTradeMadeLive->buy_sell == 'SELL') {
-                    $percentChange = $this->calculatePercentChange($lastTradeMadeLive->price, $currentPrice);
-
-                    if ($percentChange < -1.00) {
-                        $quantity = $this->calculateQuantity($usdtBalance / $currentPrice);
-
-                        if ($quantity) {
-                            $orderId = $this->placeBuyOrder($lastTradeMade->ticker, $quantity, $currentPrice,
-                                $percentChange);
-
-                            if ($orderId) {
-                                $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMadeLive->price,
-                                    $quantity, $orderId, 'BUY');
-                                return true;
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        $this->cryptoTradingBotRepository->delete($this->cryptoTradingBotRepository->bindSearchCriteria(['ticker' => $name]));
+//        CryptoTradingBot::where('ticker', $name)->delete();
     }
 
     private function getUSDTBalance()
@@ -306,14 +373,6 @@ class BinanceService implements BinanceServiceInterface
         return round((float)$balance, 3);
     }
 
-    private function placeBuyOrder(string $name, string $quantity, float $currentPrice, $percentChange)
-    {
-        User::find(1)->notify(new TelegramNotification('BUY if % '.$percentChange.' '.$quantity));
-
-        $order = $this->api->buy($name, $quantity, $currentPrice);
-
-        return $order['orderId'] ?? '';
-    }
 
     private function saveLatestTrade($ticker, $price, $percentChange): void
     {
@@ -327,9 +386,15 @@ class BinanceService implements BinanceServiceInterface
     /**
      * Check for price
      */
-    public function getPrice(string $name = 'BTCUSDT')
+    public function getPrice(string $name = 'BTCUSDT'): array
     {
-        return $this->api->price($name);
+        try {
+            $prices = $this->api->price($name);
+        } catch (Exception $e) {
+            $prices = [];
+        }
+
+        return $prices;
     }
 
     /**
