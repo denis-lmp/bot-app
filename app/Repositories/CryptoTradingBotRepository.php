@@ -8,15 +8,16 @@
 
 namespace App\Repositories;
 
+use App\Models\CryptoTradingBot;
 use App\Repositories\Contracts\AbstractEloquentRepository;
 use App\Repositories\Contracts\CryptoTradingRepositoryInterface;
 
 class CryptoTradingBotRepository extends AbstractEloquentRepository implements CryptoTradingRepositoryInterface
 {
 
-
-    public function __construct()
+    public function __construct(CryptoTradingBot $cryptoTradingBot)
     {
+        parent::__construct($cryptoTradingBot);
     }
 
     public function getForPeriod($ticker, $period): mixed

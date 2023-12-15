@@ -3,35 +3,32 @@
  * Created by PhpStorm.
  * User: Denis Kostaev
  * Date: 14/12/2023
- * Time: 14:04
+ * Time: 16:56
  */
 
 namespace App\Jobs;
 
-use App\Models\User;
-use App\Notifications\TelegramNotification;
+use App\Services\BinanceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class SendTelegramNotification implements ShouldQueue
+class CryptoTradingBotCleaner implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected string $message;
-    private string $chatId;
+    private BinanceService $binanceService;
 
     /**
      * Create a new job instance.
      *
-     * @param  string  $message
      * @return void
      */
-    public function __construct(string $message)
+    public function __construct(BinanceService $binanceService)
     {
-        $this->message = $message;
+        $this->binanceService = $binanceService;
     }
 
     /**
@@ -39,8 +36,9 @@ class SendTelegramNotification implements ShouldQueue
      *
      * @return void
      */
-    public function handle(): void
+    public function handle()
     {
-        User::find(1)->notify(new TelegramNotification($this->message));
+        $this->binanceService->deleteRaws('BTCUSDT');
     }
+
 }
