@@ -211,7 +211,7 @@ class BinanceService implements BinanceServiceInterface
 
                     if (isset($orderId)) {
                         $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMade->price, $quantity,
-                            $orderId, (int)$lastTradeMade->checks + 1, self::BUY_STATUS);
+                            $orderId, (int)$lastTradeMade->checks + 1, self::SELL_STATUS);
 
                         $this->deleteRaws($name);
 
