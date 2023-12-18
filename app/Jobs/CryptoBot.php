@@ -40,7 +40,7 @@ class CryptoBot implements ShouldQueue
             rescue(/**
              * @throws Exception
              */ function () {
-                $this->binanceService->getCheckTradingBids();
+                return $this->binanceService->getCheckTradingBids();
             }, false);
 
             if ($i < $iterations - 1) {
