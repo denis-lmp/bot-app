@@ -35,4 +35,6 @@ return [
         'token' => env('TELEGRAM_BOT_TOKEN', 'YOUR BOT TOKEN HERE')
     ],
 
+    'telegram_chat_id' => env('TELEGRAM_GROUP_ID')
+
 ];

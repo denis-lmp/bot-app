@@ -11,7 +11,6 @@ namespace App\Repositories;
 use App\Models\CryptoTrading;
 use App\Repositories\Contracts\AbstractEloquentRepository;
 use App\Repositories\Contracts\CryptoTradingRepositoryInterface;
-use Carbon\Carbon;
 
 class CryptoTradingRepository extends AbstractEloquentRepository implements CryptoTradingRepositoryInterface
 {

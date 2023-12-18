@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Repositories\Contracts\BinanceServiceInterface;
 use App\Repositories\Contracts\CryptoTradingRepositoryInterface;
 use App\Repositories\Contracts\CryptoTradingServiceInterface;
 use App\Repositories\CryptoTradingRepository;
+use App\Services\BinanceService;
 use App\Services\CryptoTradingService;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,14 +19,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        if ($this->app->environment('local')) {
-            $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
-            $this->app->register(TelescopeServiceProvider::class);
-
-        }
-
         $this->app->bind(CryptoTradingRepositoryInterface::class, CryptoTradingRepository::class);
         $this->app->bind(CryptoTradingServiceInterface::class, CryptoTradingService::class);
+
+        $this->app->bind(BinanceServiceInterface::class, BinanceService::class);
     }
 
     /**

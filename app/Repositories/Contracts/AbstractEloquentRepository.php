@@ -8,8 +8,9 @@
 
 namespace App\Repositories\Contracts;
 
+use App\Models\CryptoTrading;
 use Carbon\Carbon;
-use Dflydev\DotAccessData\Data;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 abstract class AbstractEloquentRepository implements BaseRepository
@@ -32,7 +33,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
      * Constructor
      *
      * AbstractEloquentRepository constructor.
-     * @param Model $model
+     * @param  Model  $model
      */
     public function __construct(Model $model)
     {
@@ -84,24 +85,22 @@ abstract class AbstractEloquentRepository implements BaseRepository
      * @param  array  $searchCriteria
      * @return mixed
      */
-    public function findAllBy(array $searchCriteria = []): mixed
+    public function bindSearchCriteria(array $searchCriteria = []): mixed
     {
-        $queryBuilder = $this->bindSearchCriteria($searchCriteria);
-
-        return $queryBuilder->get();
+        return $this->model->where(function ($query) use ($searchCriteria) {
+            $this->applySearchCriteriaInQueryBuilder($query, $searchCriteria);
+        });
     }
-
 
     /**
      * Apply condition on query builder based on search criteria
      *
      * @param  Object  $queryBuilder
-     * @param array $searchCriteria
+     * @param  array  $searchCriteria
      * @return object
      */
     protected function applySearchCriteriaInQueryBuilder(object $queryBuilder, array $searchCriteria = []): object
     {
-
         foreach ($searchCriteria as $key => $value) {
             //skip pagination related query params
             if (in_array($key, ['page', 'per_page'])) {
@@ -126,20 +125,41 @@ abstract class AbstractEloquentRepository implements BaseRepository
      * @param  array  $searchCriteria
      * @return mixed
      */
-    public function bindSearchCriteria(array $searchCriteria = []): mixed
+    public function findAllBy(array $searchCriteria = []): mixed
     {
-        return $this->model->where(function ($query) use ($searchCriteria) {
-            $this->applySearchCriteriaInQueryBuilder($query, $searchCriteria);
-        });
+        $queryBuilder = $this->bindSearchCriteria($searchCriteria);
+
+        return $queryBuilder->get();
     }
 
     /**
-     * @param  array  $data
+     * @param  string  $orderBy
+     * @param  string  $orderDirection
      * @return mixed
      */
-    public function save(array $data): mixed
+    private function applyOrder(string $orderBy, string $orderDirection): mixed
     {
-        return $this->model->create($data);
+        return $this->model->orderBy($orderBy, $orderDirection);
+    }
+
+    /**
+     * @param  string  $orderBy
+     * @param  string  $orderDirection
+     * @return Collection
+     */
+    public function getAllOrdered(string $orderBy = 'id', string $orderDirection = 'asc'): Collection
+    {
+        return $this->applyOrder($orderBy, $orderDirection)->get();
+    }
+
+    /**
+     * @param  string  $orderBy
+     * @param  string  $orderDirection
+     * @return CryptoTrading
+     */
+    public function getLastMadeTrade(string $orderBy = 'id', string $orderDirection = 'asc'): CryptoTrading
+    {
+       return $this->applyOrder($orderBy, $orderDirection)->first();
     }
 
     /**
@@ -171,6 +191,15 @@ abstract class AbstractEloquentRepository implements BaseRepository
         $model->save();
 
         return $model;
+    }
+
+    /**
+     * @param  array  $data
+     * @return mixed
+     */
+    public function save(array $data): mixed
+    {
+        return $this->model->create($data);
     }
 
     /**
@@ -206,7 +235,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
         }
 
         $startDate = $this->getStartDate($period);
-        $endDate = $this->getEndDate($period);
+        $endDate   = $this->getEndDate($period);
 
         return $this->applyDateCriteria($queryBuilder, $startDate, $endDate);
     }
@@ -221,7 +250,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
         list($from, $to) = $period;
 
         $fromDate = Carbon::parse($from);
-        $toDate = Carbon::parse($to);
+        $toDate   = Carbon::parse($to);
 
         if ($fromDate->isValid() && $toDate->isValid()) {
             return $this->applyDateCriteria($queryBuilder, $from, $to);
@@ -238,10 +267,7 @@ abstract class AbstractEloquentRepository implements BaseRepository
      */
     protected function applyDateCriteria($queryBuilder, $startDate, $endDate): mixed
     {
-//        dd($queryBuilder->whereBetween('created_at', [$startDate, $endDate])->toSql(), [$startDate, $endDate]);
-        return $queryBuilder
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->get();
+        return $queryBuilder->whereBetween('created_at', [$startDate, $endDate])->get();
     }
 
     /**

@@ -1,16 +1,21 @@
 <?php
+/**
+ * Created by PhpStorm.
+ * User: Denis Kostaev
+ * Date: 14/12/2023
+ * Time: 16:56
+ */
 
 namespace App\Jobs;
 
 use App\Services\BinanceService;
-use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class CryptoBot implements ShouldQueue
+class CryptoTradingBotCleaner implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -27,25 +32,13 @@ class CryptoBot implements ShouldQueue
     }
 
     /**
-     * @throws Exception
+     * Execute the job.
+     *
+     * @return void
      */
     public function handle()
     {
-        $this->getTradingBidsWithInterval(3, 18);
+        $this->binanceService->deleteRaws('BTCUSDT');
     }
 
-    private function getTradingBidsWithInterval(int $iterations, int $interval): void
-    {
-        for ($i = 0; $i < $iterations; $i++) {
-            rescue(/**
-             * @throws Exception
-             */ function () {
-                $this->binanceService->getCheckTradingBids();
-            }, false);
-
-            if ($i < $iterations - 1) {
-                sleep($interval);
-            }
-        }
-    }
 }
