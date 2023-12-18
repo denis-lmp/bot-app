@@ -320,7 +320,6 @@ class BinanceService implements BinanceServiceInterface
         if ($lastTradeMade->buy_sell == self::SELL_STATUS) {
             DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
                 $usdtBalance = $this->getUSDTBalance();
-
                 $cryptoTrading = $this->cryptoTradingRepository->getModel();
 
                 $lastTradeMadeLive = $this->cryptoTradingRepository->getLastMadeTrade('created_at', 'DESC');
@@ -330,7 +329,6 @@ class BinanceService implements BinanceServiceInterface
 
                     if ($percentChange < -1.00) {
                         $quantity = $this->calculateQuantity($usdtBalance / $currentPrice);
-
                         $orderId = null;
                         if ($quantity) {
                             $orderId = $this->placeBuyOrder($lastTradeMade->ticker, $quantity, $currentPrice,
@@ -338,7 +336,7 @@ class BinanceService implements BinanceServiceInterface
 
                             if (isset($orderId)) {
                                 $this->saveTrading($cryptoTrading, $name, $currentPrice, $lastTradeMadeLive->price,
-                                    $quantity, $orderId, (int)$lastTradeMade->checks + 1, self::SELL_STATUS);
+                                    $quantity, $orderId, (int)$lastTradeMade->checks + 1, self::BUY_STATUS);
 
                                 return true;
                             }

@@ -34,8 +34,7 @@ class CryptoBot implements ShouldQueue
         $this->getTradingBidsWithInterval(3, 18);
     }
 
-
-    private function getTradingBidsWithInterval(int $iterations, int $interval)
+    private function getTradingBidsWithInterval(int $iterations, int $interval): void
     {
         for ($i = 0; $i < $iterations; $i++) {
             rescue(/**
