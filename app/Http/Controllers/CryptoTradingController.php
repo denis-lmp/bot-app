@@ -6,19 +6,24 @@ use App\Http\Requests\CryptoTrading\CryptoTradingStoreRequest;
 use App\Http\Resources\CryptoTradingResource;
 use App\Models\CryptoTrading;
 use App\Repositories\Contracts\CryptoTradingServiceInterface;
+use App\Repositories\Contracts\TelegramServiceInterface;
 use App\Services\CryptoTradingService;
-use Carbon\Carbon;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class CryptoTradingController extends Controller
 {
     protected CryptoTradingService $cryptoTradingService;
 
-    public function __construct(CryptoTradingServiceInterface $cryptoTradingService)
-    {
+    protected TelegramService|TelegramServiceInterface $telegramService;
+
+    public function __construct(
+        CryptoTradingServiceInterface $cryptoTradingService,
+        TelegramServiceInterface $telegramService
+    ) {
         $this->cryptoTradingService = $cryptoTradingService;
+        $this->telegramService      = $telegramService;
     }
 
     /**
@@ -103,5 +108,15 @@ class CryptoTradingController extends Controller
     public function destroy(CryptoTrading $cryptoTrading)
     {
         //
+    }
+
+    public function botCallback()
+    {
+        $ticker = ['ticker' => 'BTCUSDT'];
+        $period = 'current_month';
+
+        $result = $this->cryptoTradingService->getTradingForPeriod($ticker, $period);
+
+        return $this->telegramService->sendTradings($result->toJson());
     }
 }
