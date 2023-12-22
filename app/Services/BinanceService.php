@@ -329,7 +329,7 @@ class BinanceService implements BinanceServiceInterface
 
                     if ($percentChange < -1.00) {
                         $quantity = $this->calculateQuantity($usdtBalance / $currentPrice);
-                        $orderId = null;
+
                         if ($quantity) {
                             $orderId = $this->placeBuyOrder($lastTradeMade->ticker, $quantity, $currentPrice,
                                 $percentChange);

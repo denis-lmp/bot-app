@@ -14,7 +14,7 @@ use App\Repositories\CryptoTradingRepository;
 
 class CryptoTradingService implements CryptoTradingServiceInterface
 {
-    protected CryptoTradingRepository $cryptoTradingRepository;
+    protected CryptoTradingRepositoryInterface $cryptoTradingRepository;
 
     public function __construct(CryptoTradingRepositoryInterface $cryptoTradingRepository)
     {
