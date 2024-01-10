@@ -19,4 +19,4 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('/bot/getOrders', [CryptoTradingController::class, 'botCallback']);
+Route::any('/bot/getOrders', [CryptoTradingController::class, 'botCallback']);
