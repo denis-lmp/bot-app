@@ -18,16 +18,22 @@ class StringTableBuilder
     /**
      * @param  Collection  $data
      * @param  string  $price
+     * @param  string  $coinBalance
+     * @param  string  $usdtBalance
      * @return string
      */
-    public static function makeStringTable(Collection $data, string $price): string
-    {
+    public static function makeStringTable(
+        Collection $data,
+        string $price,
+        string $coinBalance,
+        string $usdtBalance
+    ): string {
         $data = $data->map(function (CryptoTrading $cryptoTrading) {
             return [
                 $cryptoTrading->ticker == 'BTCUSDT' ? 'BTC' : $cryptoTrading->ticker,
                 $cryptoTrading->buy_sell,
                 $cryptoTrading->amount,
-//                number_format($cryptoTrading->old_price, 2),
+                //                number_format($cryptoTrading->old_price, 2),
                 number_format($cryptoTrading->price, 2),
             ];
         });
@@ -53,7 +59,9 @@ class StringTableBuilder
         // Return the table as a string
         $asString = $output->fetch();
 
-        return $asString . PHP_EOL . 'Current price: ' . $price;
+        return $asString.PHP_EOL.'Current price: '.$price.
+               PHP_EOL.'Coin balance: '.$coinBalance.
+               PHP_EOL.'USDT balance: '.$usdtBalance;
     }
 
 }
