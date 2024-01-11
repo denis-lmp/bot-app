@@ -24,10 +24,10 @@ class StringTableBuilder
     {
         $data = $data->map(function (CryptoTrading $cryptoTrading) {
             return [
-                $cryptoTrading->ticker,
+                $cryptoTrading->ticker == 'BTCUSDT' ? 'BTC' : $cryptoTrading->ticker,
                 $cryptoTrading->buy_sell,
                 $cryptoTrading->amount,
-                number_format($cryptoTrading->old_price, 2),
+//                number_format($cryptoTrading->old_price, 2),
                 number_format($cryptoTrading->price, 2),
             ];
         });
@@ -39,7 +39,7 @@ class StringTableBuilder
         $table = new Table($output);
 
         // Set the table headers
-        $table->setHeaders(['Name', 'Action',  'Amount', 'Old Price', 'Price']);
+        $table->setHeaders(['Name', 'Action', 'Amount', 'Price']);
 
         // Add rows to the table
         foreach ($data as $row) {
