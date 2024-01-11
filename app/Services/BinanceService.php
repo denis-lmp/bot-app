@@ -382,12 +382,12 @@ class BinanceService implements BinanceServiceInterface
     /**
      * Check for price
      */
-    public function getPrice(string $name = 'BTCUSDT'): array
+    public function getPrice(string $name = 'BTCUSDT'): string
     {
         try {
             $prices = $this->api->price($name);
         } catch (Exception $e) {
-            $prices = [];
+            $prices = '';
         }
 
         return $prices;
