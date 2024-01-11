@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Classes\Builders\StringTableBuilder;
 use App\Http\Requests\CryptoTrading\CryptoTradingStoreRequest;
 use App\Http\Resources\CryptoTradingResource;
 use App\Models\CryptoTrading;
@@ -123,6 +124,8 @@ class CryptoTradingController extends Controller
         $result = $this->cryptoTradingService->getTradingForPeriod($ticker, $period);
         $price  = $this->binanceService->getPrice();
 
-        return $this->telegramService->sendTradings($result->toJson().PHP_EOL.'Current price: '.$price);
+        $table = StringTableBuilder::makeStringTable($result, $price);
+
+        return $this->telegramService->sendTradings($table);
     }
 }
