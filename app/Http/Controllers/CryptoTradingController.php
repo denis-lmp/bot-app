@@ -7,6 +7,7 @@ use App\Http\Resources\CryptoTradingResource;
 use App\Models\CryptoTrading;
 use App\Repositories\Contracts\CryptoTradingServiceInterface;
 use App\Repositories\Contracts\TelegramServiceInterface;
+use App\Services\BinanceService;
 use App\Services\CryptoTradingService;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
@@ -18,12 +19,16 @@ class CryptoTradingController extends Controller
 
     protected TelegramService|TelegramServiceInterface $telegramService;
 
+    protected BinanceService $binanceService;
+
     public function __construct(
         CryptoTradingServiceInterface $cryptoTradingService,
-        TelegramServiceInterface $telegramService
+        TelegramServiceInterface $telegramService,
+        BinanceService $binanceService
     ) {
         $this->cryptoTradingService = $cryptoTradingService;
         $this->telegramService      = $telegramService;
+        $this->binanceService       = $binanceService;
     }
 
     /**
@@ -116,7 +121,8 @@ class CryptoTradingController extends Controller
         $period = 'current_month';
 
         $result = $this->cryptoTradingService->getTradingForPeriod($ticker, $period);
+        $price  = $this->binanceService->getPrice();
 
-        return $this->telegramService->sendTradings($result->toJson());
+        return $this->telegramService->sendTradings($result->toJson().PHP_EOL.'Current price: '.$price);
     }
 }
