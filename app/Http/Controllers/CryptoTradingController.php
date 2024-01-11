@@ -116,6 +116,9 @@ class CryptoTradingController extends Controller
         //
     }
 
+    /**
+     * @throws \Exception
+     */
     public function botCallback()
     {
         $ticker = ['ticker' => 'BTCUSDT'];
@@ -124,7 +127,10 @@ class CryptoTradingController extends Controller
         $result = $this->cryptoTradingService->getTradingForPeriod($ticker, $period);
         $price  = $this->binanceService->getPrice();
 
-        $table = StringTableBuilder::makeStringTable($result, $price);
+        $coinBalance  = $this->binanceService->getBalance();
+        $usdtBalance  = $this->binanceService->getBalance('USDT');
+
+        $table = StringTableBuilder::makeStringTable($result, $price, $coinBalance, $usdtBalance);
 
         return $this->telegramService->sendTradings($table);
     }

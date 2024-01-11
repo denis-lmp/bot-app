@@ -319,7 +319,7 @@ class BinanceService implements BinanceServiceInterface
     {
         if ($lastTradeMade->buy_sell == self::SELL_STATUS) {
             DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
-                $usdtBalance = $this->getUSDTBalance();
+                $usdtBalance = $this->getCoinBalance();
                 $cryptoTrading = $this->cryptoTradingRepository->getModel();
 
                 $lastTradeMadeLive = $this->cryptoTradingRepository->getLastMadeTrade('created_at', 'DESC');
@@ -468,16 +468,27 @@ class BinanceService implements BinanceServiceInterface
         return json_encode('Success.');
     }
 
-    public function getOrders(string $name = 'BTCUSDT')
+    /**
+     * @param  string  $name
+     * @return bool|string
+     * @throws Exception
+     */
+    public function getOrders(string $name = 'BTCUSDT'): bool|string
     {
         return json_encode($this->api->orders($name));
     }
 
     /**
+     * @param  string  $name
+     * @return array
      * @throws Exception
      */
-    private function getBTCBalance()
+    public function getBalance(string $name = 'BTC'): array
     {
-        return $this->api->price('BTCUSDT');
+        try {
+            return $this->api->balances($name);
+        } catch (Exception $e) {
+            return [];
+        }
     }
 }
