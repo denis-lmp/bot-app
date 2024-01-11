@@ -319,7 +319,7 @@ class BinanceService implements BinanceServiceInterface
     {
         if ($lastTradeMade->buy_sell == self::SELL_STATUS) {
             DB::transaction(function () use ($lastTradeMade, $name, $currentPrice) {
-                $usdtBalance = $this->getCoinBalance();
+                $usdtBalance = $this->getUSDTBalance();
                 $cryptoTrading = $this->cryptoTradingRepository->getModel();
 
                 $lastTradeMadeLive = $this->cryptoTradingRepository->getLastMadeTrade('created_at', 'DESC');
@@ -349,7 +349,7 @@ class BinanceService implements BinanceServiceInterface
 
     private function getUSDTBalance()
     {
-        $balances = $this->api->balances('USDT');
+        $balances = $this->api->balances();
         $balance  = $balances['USDT']['available'] ?? null;
 
         return round((float)$balance, 3);
@@ -434,7 +434,7 @@ class BinanceService implements BinanceServiceInterface
 
     private function calculateAvailableBuyQuantity()
     {
-        $usdtBalance = $this->getUSDTBalance('USDT');
+        $usdtBalance = $this->getUSDTBalance();
         if (isset($usdtBalance['USDT'])) {
             $usdtBalance = $usdtBalance['USDT']['available'];
         }
@@ -480,15 +480,19 @@ class BinanceService implements BinanceServiceInterface
 
     /**
      * @param  string  $name
-     * @return array
-     * @throws Exception
+     * @return float|null
      */
-    public function getBalance(string $name = 'BTC'): array
+    public function getBalance(string $name = 'BTC'): ?float
     {
         try {
-            return $this->api->balances($name);
+            $balances = $this->api->balances();
+
+            if (isset($balances[$name])) {
+                $quantity = $balances[$name]['available'] ?? null;
+                return round((float)$quantity, 8);
+            }
         } catch (Exception $e) {
-            return [];
+            return null;
         }
     }
 }
