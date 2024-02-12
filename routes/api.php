@@ -23,7 +23,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/bot/getOrders', [CryptoTradingController::class, 'botCallback']);
+Route::get('/orders', [CryptoTradingController::class, 'botCallback']);
 
 
 Route::middleware('auth:sanctum')->group(function () {
