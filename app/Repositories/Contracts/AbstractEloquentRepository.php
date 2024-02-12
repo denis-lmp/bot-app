@@ -234,8 +234,8 @@ abstract class AbstractEloquentRepository implements BaseRepository
             return $this->getRowsForCustomDateRange($queryBuilder, $period);
         }
 
-        $startDate = $this->getStartDate($period);
-        $endDate   = $this->getEndDate($period);
+        $startDate = $this->getDate($period, 'start');
+        $endDate = $this->getDate($period, 'end');
 
         return $this->applyDateCriteria($queryBuilder, $startDate, $endDate);
     }
@@ -271,54 +271,31 @@ abstract class AbstractEloquentRepository implements BaseRepository
     }
 
     /**
-     * @param $period
+     * Get the start or end date based on the specified period.
+     *
+     * @param  string  $period
+     * @param  string  $type
      * @return Carbon
      */
-    protected function getStartDate($period): Carbon
+    protected function getDate(string $period, string $type = 'start'): Carbon
     {
-        $startDate = Carbon::now();
+        $date = Carbon::now();
 
         switch ($period) {
             case 'current_month':
-                $startDate->startOfMonth();
+                $date->{$type . 'OfMonth'}();
                 break;
             case 'previous_month':
-                $startDate->startOfMonth()->subMonth();
+                $date->subMonth()->{$type . 'OfMonth'}();
                 break;
             case 'current_week':
-                $startDate->startOfWeek();
+                $date->{$type . 'OfWeek'}();
                 break;
             case 'previous_week':
-                $startDate->startOfWeek()->subWeek();
+                $date->subWeek()->{$type . 'OfWeek'}();
                 break;
         }
 
-        return $startDate;
-    }
-
-    /**
-     * @param $period
-     * @return Carbon
-     */
-    protected function getEndDate($period): Carbon
-    {
-        $endDate = Carbon::now();
-
-        switch ($period) {
-            case 'current_month':
-                $endDate->endOfMonth();
-                break;
-            case 'previous_month':
-                $endDate->subMonth()->endOfMonth();
-                break;
-            case 'current_week':
-                $endDate->endOfWeek();
-                break;
-            case 'previous_week':
-                $endDate->subWeek()->endOfWeek();
-                break;
-        }
-
-        return $endDate;
+        return $date;
     }
 }

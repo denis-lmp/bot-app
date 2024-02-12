@@ -459,7 +459,6 @@ class BinanceService implements BinanceServiceInterface
             $ct->price     = $order->price;
             $ct->old_price = $orders[$keyPast]->price ?? '';
             $ct->buy_sell  = $order->side;
-            $ct->order_id  = $order->orderId;
             $ct->status    = $order->status;
             $ct->checks    = 1;
             $ct->save();
