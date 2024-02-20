@@ -250,8 +250,8 @@ abstract class AbstractEloquentRepository implements BaseRepository
     {
         list($from, $to) = $period;
 
-        $fromDate = Carbon::parse($from)->startOfDay();
-        $toDate   = Carbon::parse($to)->endOfDay();
+        $fromDate = Carbon::parse($from);
+        $toDate   = Carbon::parse($to);
 
         if ($fromDate->isValid() && $toDate->isValid()) {
             return $this->applyDateCriteria($queryBuilder, $fromDate, $toDate);
