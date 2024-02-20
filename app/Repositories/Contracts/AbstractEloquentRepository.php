@@ -240,20 +240,21 @@ abstract class AbstractEloquentRepository implements BaseRepository
         return $this->applyDateCriteria($queryBuilder, $startDate, $endDate);
     }
 
+
     /**
      * @param $queryBuilder
      * @param $period
-     * @return bool|array
+     * @return false|mixed
      */
-    protected function getRowsForCustomDateRange($queryBuilder, $period): bool|array
+    protected function getRowsForCustomDateRange($queryBuilder, $period): mixed
     {
         list($from, $to) = $period;
 
-        $fromDate = Carbon::parse($from);
-        $toDate   = Carbon::parse($to);
+        $fromDate = Carbon::parse($from)->startOfDay();
+        $toDate   = Carbon::parse($to)->endOfDay();
 
         if ($fromDate->isValid() && $toDate->isValid()) {
-            return $this->applyDateCriteria($queryBuilder, $from, $to);
+            return $this->applyDateCriteria($queryBuilder, $fromDate, $toDate);
         } else {
             return false;
         }
@@ -267,7 +268,9 @@ abstract class AbstractEloquentRepository implements BaseRepository
      */
     protected function applyDateCriteria($queryBuilder, $startDate, $endDate): mixed
     {
-        return $queryBuilder->whereBetween('created_at', [$startDate, $endDate])->get();
+        $query = $queryBuilder->whereBetween('created_at', [$startDate, $endDate]);
+
+        return $query->get();
     }
 
     /**
