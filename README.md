@@ -5,6 +5,8 @@ It uses user's Binance account to make simple operation automatically:
 - send notifications via Telegram bot about selling/buying order
 - get the latest price using Telegram webhook.
 
+It has a simple frontend on https://github.com/denis-lmp/bot-frontend for showing price changes.
+
 
 ## To run the local dev environment:
 - Navigate to `project` folder
