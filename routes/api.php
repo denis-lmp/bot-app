@@ -21,10 +21,12 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/orders', [CryptoTradingController::class, 'botCallback']);
+Route::post('/register',[AuthController::class,'register']);
+Route::post('/logout',[AuthController::class,'logout'])
+    ->middleware('auth:sanctum');
 
+Route::get('/orders', [CryptoTradingController::class, 'botCallback']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/prices', [PriceController::class, 'getPrices']);
