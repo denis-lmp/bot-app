@@ -26,7 +26,7 @@ Route::post('/register',[AuthController::class,'register']);
 Route::post('/logout',[AuthController::class,'logout'])
     ->middleware('auth:sanctum');
 
-Route::get('/orders', [CryptoTradingController::class, 'botCallback']);
+Route::any('/orders', [CryptoTradingController::class, 'botCallback']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/prices', [PriceController::class, 'getPrices']);
